@@ -77,7 +77,7 @@ def train_data(name, model, x_train,x_test, y_train,y_test):
     model.fit(x_train,y_train)
     score = model.score(x_train, y_train)
     result = model.predict(x_train)
-    if name in ['knn_all', 'svr_linear_all', 'gbdt_all', 'lightbgm_all', 'rfr_all', 'gbr_all', 'etr_all','svr_linear_all','stacking_all','voting_all','bagging_all']:
+    if name in ['KNN', 'SVR_LR', 'GBDT', 'Lightbgm', 'RFR', 'GBR', 'ETR','STACK','VOTE','BR']:
         y_train=np.array(y_train).reshape(-1, 1)
     print(y_train.shape)
     result = np.reshape(result,[len(result),1])

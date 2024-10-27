@@ -11,11 +11,10 @@ colun=['FB', 'RSP','RSRP',
                      'betaV', 'CCI', 'Hb', 'Husr', 'Hm',
                      'deltaH', 'deltaHv', 'L', 'D',
                      'UCI','ekparam','x','y','LOS']
-colunyuanshi=['CI', 'FB', 'RSP', 'RSRP',
-                                     'betaV', 'CCI', 'Hb', 'Husr', 'Hm',
-                                     'deltaH', 'deltaHv', 'L', 'D',
-                                     'UCI', 'cosA', 'cosB', 'cosC'
-                                     ]
+colunyuanshi=['FB','RSP',
+             'betaV', 'CCI', 'Hb', 'Husr', 'Hm',
+             'deltaH', 'deltaHv', 'L', 'D',
+             'UCI', 'cosA', 'cosB', 'cosC' ]
 import os
 import pandas as pd
 import time
@@ -69,7 +68,7 @@ def load_dataset(dataset_path, debug=False):
                 break
 
 
-    print(type(all_data))
+    print((all_data['deltaH'] < 0).sum())
     # print("Dataset loaded in %.1f s" % (time.time() - t))
     return all_data
 
@@ -168,7 +167,7 @@ def cost231(X):
 
     # 计算 Lp
     Lp = 46.3 + 33.9 * np.log10(X['FB'].values) +(44.96 - 6.55 * np.log10(X['Hb'].values)) * np.log10(X['D'].values / 1000) -13.82 * np.log10(X['Hb'].values) - ah + cm + cell
-    print(Lp)
+    # print(Lp)
     # 返回 RSP 和 Lp 的差值
     return np.array((X['RSP'].values - Lp).ravel())
 
@@ -182,7 +181,7 @@ def spm(X):
 
 
     Lp=23.5+44.9*np.log10(X['D'].values)-6.55*np.log10(X['Hb'].values)*np.log10(X['D'].values)+5.83*np.log10(np.abs(X['Hb'].values-(X['Husr'].values+ X['Hm'].values)-1.5))
-    print(Lp)
+    # print(Lp)
     return np.array((X['RSP'].values - Lp).ravel())
 
 def ekloss(X):
@@ -263,7 +262,7 @@ def ekloss(X):
 
 
     Aor = a0 * (amod - 35) * (1 + np.log10(10 / dmod)) / 25
-    print(L0,Adif,Aor)
+    # print(L0,Adif,Aor)
     return np.array(X['RSP'].values-(L0 + Adif + Alu + Aor))
 
 
@@ -339,7 +338,7 @@ def ekloss1(X):
     Alu = 1
     Aor = a0 * (np.minimum(50, np.maximum(5, (X['D'].values / 1000) - 35))) * (
                 1 + np.log10(10 / np.minimum(50, (X['D'].values / 1000)))) / 25
-    print((np.array(L0) + np.array(Adif) + Alu + Aor))
+    # print((np.array(L0) + np.array(Adif) + Alu + Aor))
     return np.array(X['RSP'].values - (np.array(L0) + np.array(Adif) + Alu + Aor))
 
 def calculateExpression(r, d) :
@@ -357,83 +356,188 @@ def calculateExpression(r, d) :
     return result
 
 def tr38901(X):
-    dBP=4*(X['deltaH'].values-1)*(X['Hm'].values+1.5)*X['FB'].values/300
-    pl = np.where(
-        X['L'].values <= 10,
-        28 + 22 * np.log10(X['D'].values) + 20 * np.log10(X['FB'].values / 1000),
-        np.where(
-            (X['L'].values > 10) & (X['L'].values < dBP),
-            28 + 22 * np.log10(X['D'].values) + 20 * np.log10(X['FB'].values / 1000),
-            28 + 40 * np.log10(X['D'].values) + 20 * np.log10(X['FB'].values / 1000) -
-            9 * np.log10(dBP ** 2 + (X['Hb'].values -X['Husr'].values- X['Hm'].values - 1.5) ** 2)
-        )
-    )
+    X.loc[:, 'deltaH'] = np.where(X['deltaH'] == 0, X['deltaH'] + 1, np.abs(X['deltaH']))
 
-    # 计算非 LOS 情况下的 pl1
-    # pl1_non_los = 13.54 + 39.08 * np.log10(X['D'].values) + 20 * np.log10(X['FB'].values / 1000) - 0.6 *(X['Hm'].values)
-    pl1_non_los = 32.4 + 30 * np.log10(X['D'].values) + 20 * np.log10(X['FB'].values / 1000)
-    a=np.where(X['LOS'].values,np.random.normal(0, 4),np.random.normal(0, 6))
-    # 根据 LOS 状态选择 pl 或 pl1
-    loss = np.where(X['LOS'].values, pl, pl1_non_los)+a
-    print(loss)
-    return np.array(X['RSP'].values-loss)
-if __name__ == '__main__':
+    dBP=4*(X['deltaH'].values)*X['Hm'].values*X['FB'].values/300
 
-    dataset_path = 'F:/wireless/huawei/filter_dataset/'
-    data = load_dataset(dataset_path, debug=False)
-    print(dataset_path)
-    data = data.dropna(axis=0, how='any')
 
-    print("len(data):", len(data))
+    ta1= np.where(
+                    (X['L'].values > 10) & (X['L'].values < dBP),
+                    28 + 22 * np.log10(X['D'].values) + 20 * np.log10(X['FB'].values / 1000),
+                    28 + 40 * np.log10(X['D'].values) + 20 * np.log10(X['FB'].values / 1000) -
+                    9 * np.log10(dBP ** 2 + (X['deltaH'].values- X['Hm'].values) ** 2)
+                    )+ np.random.normal(0, 4)
+    ta2=13.54+39.08*np.log10(X['D'].values)+20*np.log10(np.abs((X['FB'].values / 1000)-0.6*(X['Hm'].values-1.5))+0.1)+ np.random.normal(0, 6)
+    ti1= np.where(
+                X['L'].values <= 10,
+                32.4 + 21 * np.log10(X['D'].values) + 20 * np.log10(X['FB'].values / 1000),
+                np.where(
+                    (X['L'].values > 10) & (X['L'].values < dBP),
+                    32.4 + 21 * np.log10(X['D'].values) + 20 * np.log10(X['FB'].values / 1000),
+                    32.4 + 40 * np.log10(X['D'].values) + 20 * np.log10(X['FB'].values / 1000) -
+                    9.5 * np.log10(dBP ** 2 + (X['deltaH'].values - X['Hm'].values ) ** 2)
+                )
+            ) + np.random.normal(0, 4)
+    ti2=22.4+35.3*np.log10(X['D'].values)+21.3*np.log10(np.abs((X['FB'].values / 1000)-0.3*(X['Hm'].values-1.5))+0.1)+ np.random.normal(0, 7.82)
+    # ti2=32.4+31.9*np.log10(X['D'].values)+20*np.log10(X['FB'].values / 1000)+ + np.random.normal(0, 8.2)
+    pl = np.where(X['deltaH'].values >= 0,
+                  np.where(X['LOS'].values,ta1,np.maximum(ta1,ta2)),
+                  np.where(X['LOS'].values,ti1,np.maximum(ti1,ti2))
+                  )
 
-    data = data.iloc[list(data["deltaH"] > 1)]
 
-    # colunfloat = ['FB', 'RSP', 'betaV', 'deltaHv', 'L', 'D', 'RSRP']
-    # colunint = ['CCI', 'Hb', 'Husr', 'Hm', 'deltaH', 'UCI',]
 
-    colunfloat=['FB', 'RSP','betaV', 'deltaHv', 'L', 'D','RSRP']
-    colunint=['CCI', 'Hb', 'Husr', 'Hm','deltaH','UCI','x','y']
-    colunlist=['ekparam']
-    data[colunfloat]=data[colunfloat].astype("float")
-    data[colunint]=data[colunint].astype('int')
 
-    # print("step1, log...")
-    # p_data["FB"] = np.log10(data["FB"].astype("float"))
-    # p_data["Hb"] = np.log10(data["Hb"].astype("float"))
-    # p_data["D"] = np.log10(data["D"].astype("float"))
-    # p_data["Husr"] = np.log10(data["Husr"].astype("float"))
-    # # p_data["deltaHv"] = np.log10(data["deltaHv"].astype("float"))
-    # p_data["deltaH"] = np.log10(data["deltaH"].astype("float"))
-    # p_data["L"] = np.log10(data["L"].astype("float"))
+    # print(loss)
+    return np.array(X['RSP'].values-pl)
+
+
+def process_csv_files_in_directory(directory_path,out_path):
+    #获取目录下的所有文件列表
+    files = os.listdir(directory_path)
+
+    # 遍历所有 CSV 文件
+    for file in tqdm(files):
+        if file.endswith('.csv'):
+            file_path = os.path.join(directory_path, file)
+            # print(f"Processing file: {file_path}")
+
+            # 读取 CSV 文件
+            data = pd.read_csv(file_path)
+            data = data.dropna(axis=0, how='any')
+
+
+
+            colunfloat = ['FB', 'RSP', 'betaV', 'deltaHv', 'L', 'D', 'RSRP']
+            colunint = ['CCI', 'Hb', 'Husr', 'Hm', 'deltaH', 'UCI', 'x', 'y']
+            data[colunfloat] = data[colunfloat].astype("float")
+            data[colunint] = data[colunint].astype('int')
+
+            filtered_data = data[data['deltaH'] < 0]
+            if len(filtered_data)>0:
+                inputs = filtered_data[colun]
+    #         # model_name = 'COST231'
+    #         # # 创建模型实例，传入数学公式和选定的特征
+    #         # model = FormulaModel(cost231, selected_features=['FB', 'deltaH', 'UCI', 'D', 'RSP', 'Hm', 'Husr', 'Hb'],
+    #         #                      model_name=model_name)
+    #         # data[model_name]=model.predict(inputs)
+    #         #
+    #         # model_name = 'SPM'
+    #         # model = FormulaModel(spm, selected_features=['deltaH', 'FB', 'D', 'RSP', 'Hm', 'UCI', 'Husr', 'Hb'],
+    #         #                      model_name=model_name)
+    #         # data[model_name] = model.predict(inputs)
     #
-    # print("step2, z-score...")
-    # p_data = (p_data - p_data.mean()) / data.std()
-    #
-    # p_data["RSRP"] = data["RSRP"]
+                model_name = 'TR38901'
+                model = FormulaModel(tr38901,
+                                     selected_features=['deltaH', 'FB', 'D', 'L', 'RSP', 'Hm', 'LOS', 'Husr', 'Hb'],
+                                     model_name=model_name)
+                data.loc[data['deltaH'] < 0, model_name]= model.predict(filtered_data)
+                # data[model_name]=model.predict(inputs)
+                # 对数据进行处理（运算）
 
-    inputs = data[colun]
 
-    label = data[['RSRP']]
-    # 打印输入数据的形状和第一个数据行
-    print(inputs.shape, "inputs length:", len(inputs), "inputs first row:", inputs.iloc[0])
+                # 这里可以保存处理后的结果到新文件或进行其他操作
+                result_file_path = os.path.join(out_path, f"{file}")
+                data.to_csv(result_file_path, index=False)
+                print(f"Result saved to: {result_file_path}")
+            else:
+                continue
+# import gc
+# def process_csv_files_in_directory(directory_path,out_path):
+#     mean_values = pd.read_pickle('./model/mean_values.pkl')
+#     std_values = pd.read_pickle('./model/std_values.pkl')
+#     # 获取目录下的所有文件列表
+#     files = os.listdir(directory_path)
+#     # ['KNN', 'LR', 'DTR', 'RR', 'Lasso', 'GBR', 'RFR', 'ETR', 'BR']
+#
+#     for name in['KNN', 'LR', 'DTR', 'RR', 'Lasso', 'GBR', 'RFR', 'ETR', 'BR']:
+#         with open('./model/ML/' + name + '.pickle', 'rb') as f:
+#             model = pd.read_pickle(f)
+#         print(name)
+#         # 遍历所有 CSV 文件
+#         for file in tqdm(files):
+#             if file.endswith('.csv'):
+#                 file_path = os.path.join(directory_path, file)
+#
+#
+#                 # 读取 CSV 文件
+#                 data = pd.read_csv(file_path)
+#                 data = data.dropna(axis=0, how='any')
+#
+#
+#                 inputs = data[colunyuanshi].astype("float")
+#
+#
+#                 inputs["FB"] = data["FB"].astype("float")
+#                 inputs["Hb"] = data["Hb"].astype("float")
+#                 inputs["D"] = np.log10(data["D"].astype("float"))
+#                 inputs["Husr"] = np.log10(data["Husr"].astype("float"))
+#                 inputs["deltaH"] = np.sign(data["deltaH"]) * np.log10(np.abs(data["deltaH"].astype("float")) + 1)
+#
+#                 inputs["L"] = np.log10(data["L"].astype("float"))
+#                 inputs = (inputs - mean_values) / std_values
+#                 inputs=inputs[colunyuanshi].values
+#
+#                 data[name]=model.predict(inputs)
+#
+#                 # 这里可以保存处理后的结果到新文件或进行其他操作
+#                 result_file_path = os.path.join(out_path, f"{file}")
+#                 data.to_csv(result_file_path, index=False)
+#
+#
+#         del model
+#         gc.collect()  # 显式调用垃圾回收
+# #
+# #
+dataset_path = 'F:/wireless/huawei/csv/result/'
+out_path='F:/wireless/huawei/csv/result/'
 
-    # 打印标签数据的形状和第一个数据行
-    print(label.shape, "label length:", len(label), "label first row:", label.iloc[0])
-
-    model_name='cost231'
-    # 创建模型实例，传入数学公式和选定的特征
-    model = FormulaModel(cost231, selected_features=['FB','deltaH','UCI','D','RSP','Hm','Husr','Hb'],model_name=model_name)
-    model.score(inputs, label)
-
-    model_name='spm'
-    model = FormulaModel(spm, selected_features=['deltaH', 'FB', 'D', 'RSP', 'Hm','UCI','Husr','Hb'],model_name=model_name)
-    model.score(inputs, label)
-
-    model_name = 'tr38901'
-    model = FormulaModel(tr38901, selected_features=['deltaH', 'FB', 'D', 'L', 'RSP', 'Hm', 'LOS','Husr','Hb'],
-                         model_name=model_name)
-    model.score(inputs, label)
-    # model_name='ek'
+process_csv_files_in_directory(dataset_path,out_path)
+# if __name__ == '__main__':
+#
+#     dataset_path = 'F:/wireless/huawei/filter_dataset/'
+#     data = load_dataset(dataset_path, debug=False)
+#     print(dataset_path)
+#     data = data.dropna(axis=0, how='any')
+#
+#     print("len(data):", len(data))
+#
+#
+#
+#     # colunfloat = ['FB', 'RSP', 'betaV', 'deltaHv', 'L', 'D', 'RSRP']
+#     # colunint = ['CCI', 'Hb', 'Husr', 'Hm', 'deltaH', 'UCI',]
+#
+#     colunfloat=['FB', 'RSP','betaV', 'deltaHv', 'L', 'D','RSRP']
+#     colunint=['CCI', 'Hb', 'Husr', 'Hm','deltaH','UCI','x','y']
+#     colunlist=['ekparam']
+#     data[colunfloat]=data[colunfloat].astype("float")
+#     data[colunint]=data[colunint].astype('int')
+#
+#
+#
+#     inputs = data[colun]
+#
+#     label = data[['RSRP']]
+#     #打印输入数据的形状和第一个数据行
+#     print(inputs.shape, "inputs length:", len(inputs), "inputs first row:", inputs.iloc[0])
+#
+#     # 打印标签数据的形状和第一个数据行
+#     print(label.shape, "label length:", len(label), "label first row:", label.iloc[0])
+#     #
+#     # model_name='cost231'
+#     # # 创建模型实例，传入数学公式和选定的特征
+#     # model = FormulaModel(cost231, selected_features=['FB','deltaH','UCI','D','RSP','Hm','Husr','Hb'],model_name=model_name)
+#     # model.score(inputs, label)
+#     #
+#     # model_name='spm'
+#     # model = FormulaModel(spm, selected_features=['deltaH', 'FB', 'D', 'RSP', 'Hm','UCI','Husr','Hb'],model_name=model_name)
+#     # model.score(inputs, label)
+#
+    # model_name = 'tr38901'
+    # model = FormulaModel(tr38901, selected_features=['deltaH', 'FB', 'D', 'L', 'RSP', 'Hm', 'LOS','Husr','Hb'],
+    #                      model_name=model_name)
+    # model.score(inputs, label)
+    # # model_name='ek'
     # model = FormulaModel(ekloss1, selected_features=['deltaH', 'FB', 'D', 'RSP', 'Hm','ekparam','UCI','x','y','Husr','Hb'],model_name=model_name)
     # model.score(inputs, label)
 
