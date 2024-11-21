@@ -17,6 +17,38 @@ def get_filename(root_dir):
             filenames.append([file_name,file_content])
     return filenames
 
+def load_dataset1(dataset_path, debug=False):
+    t = time.time()
+    sample_cnt = 0
+
+
+    # 获取所有文件的路径
+    path = get_filename(dataset_path)
+    all_data = pd.DataFrame(columns=['D3','HR','TILT','FQ','OBS','RSRP' ])
+    # 遍历每个文件
+    for file_name, file_content in tqdm(path):
+        sample_cnt += 1
+
+
+        with open(file_content, 'rb') as test:
+            pb_data = pd.read_csv(test)
+
+
+        # 只选择需要的列
+        pb_data = pb_data[['D3','HR','TILT','FQ','OBS','RSRP' ]]
+
+
+        # 将该文件的数据追加到list中
+        all_data = pd.concat([all_data, pb_data], ignore_index=True)
+
+        if debug:
+            if sample_cnt == 1:  # 如果debug模式开启，只处理一个文件
+                break
+
+
+
+    return all_data
+
 def load_dataset(dataset_path, debug=False):
     t = time.time()
     sample_cnt = 0
@@ -65,7 +97,6 @@ def pictocsv(rootdir):
 
 import numpy as np
 import os, time, pickle
-
 
 
 

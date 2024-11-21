@@ -1,20 +1,20 @@
+
 # -*- coding: gbk -*-
+import matplotlib.pyplot as plt
+from pykrige.ok import OrdinaryKriging
 import numpy as np
 import os,re
 from shapely.geometry import Polygon, LineString
 import pandas as pd
-from flask import Flask, request, jsonify
-from flask_cors import CORS
-import matplotlib.pyplot as plt
 from pykrige.ok import OrdinaryKriging
 import numpy as np
-from scipy.interpolate import make_interp_spline
+from matplotlib.colors import LinearSegmentedColormap
 
-app = Flask(__name__)
-CORS(app)
-
+# 定义颜色条：蓝 -> 绿 -> 黄
+colors = [(0, 0, 1), (0, 1, 0), (1, 1, 0)]  # 蓝色、绿色、黄色
+custom_cmap = LinearSegmentedColormap.from_list("BlueGreenYellow", colors)
 # 全局变量初始化
-grid_names = ['area_alt','RSRP', 'COST231', 'SPM', 'TR38901', 'LR', 'KNN', 'DTR', 'RR', 'Lasso', 'GBR', 'RFR', 'ETR', 'BR']
+grid_names = ['RSRP', 'COST231', 'SPM', 'TR38901', 'LR', 'KNN', 'DTR', 'RR', 'Lasso', 'GBR', 'RFR', 'ETR', 'BR']
 grid_size = 80
 
 # 初始化每个网格数据
@@ -22,6 +22,29 @@ grid_data = {name: np.full((grid_size, grid_size), 0) for name in grid_names}
 
 building_polygons = []
 
+def kriging_interpolation(grid_data):
+    # 识别0值点和非0值点
+    grid_x, grid_y = np.indices(grid_data.shape)
+
+    # 找到已知点（非零值点）
+    known_x = grid_x[grid_data != 0].astype(float)  # 确保为 float 类型
+    known_y = grid_y[grid_data != 0].astype(float)  # 确保为 float 类型
+    known_values = grid_data[grid_data != 0].astype(float)  # 确保为 float 类型
+
+    # 找到未知点（零值点）
+    unknown_x = grid_x[grid_data == 0].astype(float)  # 确保为 float 类型
+    unknown_y = grid_y[grid_data == 0].astype(float)  # 确保为 float 类型
+
+    # 创建克里金插值模型
+    OK = OrdinaryKriging(known_x, known_y, known_values, variogram_model='linear', verbose=False, enable_plotting=False)
+
+    # 对未知点进行插值
+    z, _ = OK.execute('points', unknown_x, unknown_y)
+
+    # 用插值结果填充0值点
+    grid_data[grid_data == 0] = z
+
+    return grid_data
 
 def draw(df):
     # 第一张图：以 distance 为 x，ele 为 y，填充图下方为浅蓝色
@@ -109,36 +132,15 @@ def draw(df):
     # 保存第二张图
     plt.savefig('F://jsdaima/result/rsrp_subplots.svg', format='svg')
     plt.show()
-@app.route('/api/get-files', methods=['POST'])
-def get_files():
-    directory = './csv/result/'  # 指定的文件目录
-    files = os.listdir(directory)
-    csv_files = csv_files = sorted(
-    [os.path.splitext(file)[0] for file in files if file.endswith('.csv')],
-    key=lambda x: int(re.search(r'(\d+)_buildings(\d+)', x).group(1)) if re.search(r'(\d+)_buildings(\d+)', x) else float('inf')
-)
-
-
-    return jsonify(csv_files)
-
-
-
-
-file_name=''
-grid_names = ['RSRP','COST231', 'SPM', 'TR38901', 'LR', 'KNN', 'DTR', 'RR', 'Lasso', 'GBR','RFR','ETR','BR']
-@app.route('/api/getarea', methods=['POST'])
-
-
-def getarea():
+def getarea(file_name):
     global  building_polygons, grid_data
 
     # 获取前端传递的JSON数据
-    data = request.get_json()
-    file_name = data.get('name')
+
     print(f"文件名：{file_name}")
 
     # 设置新的路径
-    # new_path = os.path.join('../xvym46l1.jp.wksmym.top/', file_name.lstrip('./'))
+
     data = pd.read_csv(file_name)
     print(f'开始创建 {file_name} 区域')
 
@@ -158,8 +160,6 @@ def getarea():
         # 更新高度和海拔信息
         grid_data['RSRP'][x, y] = row['RSRP']
         grid_data['area_alt'][x, y] = husr+hm
-
-
         filter_name=[name for name in grid_names if name != 'area_alt']
         # 更新每个 grid_name 的网格值
         for name in filter_name:
@@ -173,49 +173,70 @@ def getarea():
 
     grid_data['area_alt'][0, 0] = data['Hb'].values[0]
 
-    # 批量进行插值并更新
-    for name in grid_names:
-        grid_data[name] = kriging_interpolation(grid_data[name])
+    # # 批量进行插值并更新
+    # for name in grid_names:
+    #     grid_data[name] = kriging_interpolation(grid_data[name])
 
     print('创建成功')
-    return jsonify({'status': 200})
+    # 创建图形
+    plt.figure(figsize=(8, 8))  # 设置图像大小
+
+    # 创建掩码，将网格数据中值为0的部分掩盖
+    masked_data = np.ma.masked_where(grid_data['RSRP'] == 0, grid_data['RSRP'])
+
+    # 设置颜色映射，零值显示为白色
+    cmap = plt.cm.viridis
+    cmap.set_bad(color='white')  # 将掩码（零值部分）显示为白色
+
+    # 绘制图像
+    plt.imshow(masked_data, cmap=cmap, interpolation='nearest', origin='lower')
+    plt.colorbar(label='Value')  # 添加颜色条并设置标签
+    plt.title("80x80 Grid Visualization (Zeroes as White)")  # 设置标题
+    plt.xlabel("Y")  # 设置 x 轴标签
+    plt.ylabel("X")  # 设置 y 轴标签
+    plt.show()
+
+    return {'status': 200}
 
 
-# 处理网格数据的克里金插值函数
-def kriging_interpolation(grid_data):
-    # 识别0值点和非0值点
-    grid_x, grid_y = np.indices(grid_data.shape)
+def draw_line(x,y):
+    # 创建图形
+    plt.figure(figsize=(8, 8))
 
-    # 找到已知点（非零值点）
-    known_x = grid_x[grid_data != 0].astype(float)  # 确保为 float 类型
-    known_y = grid_y[grid_data != 0].astype(float)  # 确保为 float 类型
-    known_values = grid_data[grid_data != 0].astype(float)  # 确保为 float 类型
+    # 创建掩码，将网格数据中值为0的部分掩盖
+    masked_data = np.ma.masked_where(grid_data['RSRP'] == 0, grid_data['RSRP'])
 
-    # 找到未知点（零值点）
-    unknown_x = grid_x[grid_data == 0].astype(float)  # 确保为 float 类型
-    unknown_y = grid_y[grid_data == 0].astype(float)  # 确保为 float 类型
+    # 设置颜色映射，零值显示为白色
 
-    # 创建克里金插值模型
-    OK = OrdinaryKriging(known_x, known_y, known_values, variogram_model='linear', verbose=False, enable_plotting=False)
+    custom_cmap.set_bad(color='white')
 
-    # 对未知点进行插值
-    z, _ = OK.execute('points', unknown_x, unknown_y)
-
-    # 用插值结果填充0值点
-    grid_data[grid_data == 0] = z
-
-    return grid_data
+    # 绘制网格数据
+    plt.imshow(masked_data, cmap=custom_cmap, interpolation='nearest',origin='lower')
+    plt.colorbar(label='Value')
+    plt.title("80x80 Grid Visualization with Line from Origin to Target")
+    plt.xlabel("Y")
+    plt.ylabel("X")
 
 
-@app.route('/api/getcross', methods=['POST'])
 
-def get_path():
+    # 绘制原点到目标位置的连线
+    plt.plot([0, y], [0, x], color='red', linewidth=2, linestyle='--', label="Line from (0, 0) to Target")
+
+    # 标记起点和终点
+    plt.scatter(0, 0, color='blue', s=50, label="Origin (0, 0)")
+    plt.scatter(y, x, color='green', s=50, label=f"Target ({y}, {x})")
+
+    # 添加图例
+    plt.legend(loc="upper right")
+
+    # 显示图像
+    plt.show()
+def get_path(x,y):
     global  building_polygons, grid_data
 
     # 获取前端传递的JSON数据
-    data = request.get_json()
-    x = data['x']
-    y = data['y']
+
+
     path = []
 
     # 确保坐标在网格范围内
@@ -266,9 +287,18 @@ def get_path():
     # 输出路径并保存为 CSV
     print(path)
     df = pd.DataFrame(path).sort_values(by='distance')
-    df.to_csv('F://jsdaima/result/resultdown.csv', index=False)
+
     draw(df)
 
-    return jsonify(path)
+    return path
+if __name__ == '__main__':
+    data_path='./csv/result/646_buildings319.csv'
+    x,y=26,13
+    getarea(data_path)
 
-app.run(host='127.0.0.1', port=5000, debug=True)
+    draw_line(x,y)
+    # 批量进行插值并更新
+    for name in grid_names:
+        grid_data[name] = kriging_interpolation(grid_data[name])
+
+    get_path(x,y)

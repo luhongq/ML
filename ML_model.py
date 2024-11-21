@@ -63,7 +63,7 @@ print( "test:",np.shape(X_test) )
 
 
 
-need_test = True
+
 dir_path = './model/ML/'
 if not os.path.exists(dir_path):
     os.makedirs(dir_path)
@@ -89,10 +89,10 @@ train_data("LR", lr,
                   X_train, X_test, Y_train, Y_test)
 
 
-from sklearn.linear_model import ElasticNet
-print(' ElasticNet 回归')
-en = ElasticNet(alpha=0.1, l1_ratio=0.7)
-train_data("EN", en, X_train, X_test, Y_train, Y_test)
+# from sklearn.linear_model import ElasticNet
+# print(' ElasticNet 回归')
+# en = ElasticNet(alpha=0.1, l1_ratio=0.7)
+# train_data("EN", en, X_train, X_test, Y_train, Y_test)
 
 from sklearn.linear_model import Ridge
 print('岭回归')
@@ -125,41 +125,41 @@ train_data("GBR", gbr, X_train, X_test, Y_train.ravel(), Y_test)
 
 
 
-from xgboost import XGBRegressor
-print('XGBoost 回归')
-xgbr = XGBRegressor(n_estimators=100, learning_rate=0.1)
-train_data("XGBR", xgbr, X_train, X_test, Y_train, Y_test)
+# from xgboost import XGBRegressor
+# print('XGBoost 回归')
+# xgbr = XGBRegressor(n_estimators=100, learning_rate=0.1)
+# train_data("XGBR", xgbr, X_train, X_test, Y_train, Y_test)
 
 
 
 
 
 
-from sklearn.ensemble import GradientBoostingRegressor
-print('gbdt回归')
-gbdt = GradientBoostingRegressor(n_estimators=100, learning_rate=0.2, max_depth=4, random_state=42, subsample=0.85,max_features=0.9)
-train_data("GBDT", gbdt,
-                  X_train, X_test, Y_train.ravel(), Y_test)
-
-
-from lightgbm import  LGBMRegressor
-print(' LightGBM 回归')
-# 初始化模型
-lgbm_model = LGBMRegressor(
-    boosting_type='gbdt',         # 基于梯度提升决策树
-    objective='regression',       # 回归任务
-    n_estimators=100,             # 总迭代次数（树的数量）
-    learning_rate=0.2,           # 学习步长
-
-    feature_fraction=0.9,         # 特征采样比例
-    random_state=42,
-    bagging_fraction=0.85,  # 数据采样比例，85%的数据用于训练
-    bagging_freq= 5,  # 每5次迭代进行一次 bagging
-# 随机种子
-    max_depth=4
-)
-train_data("Lightbgm", lgbm_model,
-                  X_train, X_test, Y_train.ravel(), Y_test)
+# from sklearn.ensemble import GradientBoostingRegressor
+# print('gbdt回归')
+# gbdt = GradientBoostingRegressor(n_estimators=100, learning_rate=0.2, max_depth=4, random_state=42, subsample=0.85,max_features=0.9)
+# train_data("GBDT", gbdt,
+#                   X_train, X_test, Y_train.ravel(), Y_test)
+#
+#
+# from lightgbm import  LGBMRegressor
+# print(' LightGBM 回归')
+# # 初始化模型
+# lgbm_model = LGBMRegressor(
+#     boosting_type='gbdt',         # 基于梯度提升决策树
+#     objective='regression',       # 回归任务
+#     n_estimators=100,             # 总迭代次数（树的数量）
+#     learning_rate=0.2,           # 学习步长
+#
+#     feature_fraction=0.9,         # 特征采样比例
+#     random_state=42,
+#     bagging_fraction=0.85,  # 数据采样比例，85%的数据用于训练
+#     bagging_freq= 5,  # 每5次迭代进行一次 bagging
+# # 随机种子
+#     max_depth=4
+# )
+# train_data("Lightbgm", lgbm_model,
+#                   X_train, X_test, Y_train.ravel(), Y_test)
 
 from sklearn.ensemble import BaggingRegressor
 from sklearn.tree import DecisionTreeRegressor
